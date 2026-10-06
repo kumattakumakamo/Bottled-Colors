@@ -181,13 +181,25 @@ const SPEED = reduced ? .2 : 1;
 const wait = ms => new Promise(r => setTimeout(r, ms));
 let view = '';
 
+// 画面全体を端末の表示領域に収める：縮小率K = min(幅/390, 高さ/設計上の必要高さ)
+let K = 1;
+function fit() {
+  const sc = app.querySelector('.screen');
+  if (!sc) return;
+  const W = app.clientWidth, Hv = app.clientHeight, need = +sc.dataset.h || 844;
+  K = Math.min(W / 390, Hv / need);
+  sc.style.width = W / K + 'px';
+  sc.style.height = Hv / K + 'px';
+  sc.style.transform = `scale(${K})`;
+}
+
 // ================= 1. shelf =================
 function renderShelf() {
   view = 'shelf';
   const items = [...bottles, null];
   const rows = [];
   for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
-  app.innerHTML = `
+  app.innerHTML = `<div class="screen" data-h="810">
   <header class="hdr">
     <button class="circle-btn" id="menuBtn" aria-label="メニュー">${icon('menu')}</button>
     <h1 class="hdr-title">My Color Shelf</h1>
@@ -219,7 +231,8 @@ function renderShelf() {
     </div>
     <div class="cab-base"></div>
   </section>
-  <p class="shelf-hint">瓶をタップして開く</p>`;
+  <p class="shelf-hint">瓶をタップして開く</p></div>`;
+  fit();
   app.querySelector('#menuBtn').onclick = () => toast('メニューは準備中です');
   app.querySelector('#addBtn').onclick = () => go('#/new');
   app.querySelectorAll('[data-new]').forEach(b => b.onclick = () => go('#/new'));
@@ -232,7 +245,7 @@ function renderDetail(id) {
   if (!b) return go('#/');
   view = 'detail';
   const c = b.colors;
-  app.innerHTML = `
+  app.innerHTML = `<div class="screen" data-h="830">
   <header class="hdr">
     <button class="circle-btn" id="backBtn" aria-label="棚に戻る">${icon('back')}</button>
     <button class="circle-btn" id="moreBtn" aria-label="その他の操作" aria-haspopup="menu">${icon('more')}</button>
@@ -254,7 +267,8 @@ function renderDetail(id) {
     </div>`).join('')}
   </section>
   <button class="copy-all" id="copyAll">${icon('copy')}HEXをまとめてコピー</button>
-  <div class="detail-cta"><button class="cta" id="editBtn">${icon('pencil')}編集する</button></div>`;
+  <div class="detail-cta"><button class="cta" id="editBtn">${icon('pencil')}編集する</button></div></div>`;
+  fit();
 
   app.querySelector('#backBtn').onclick = () => go('#/');
   app.querySelector('#editBtn').onclick = () => go('#/edit/' + b.id);
@@ -269,7 +283,7 @@ function toggleMenu(b) {
   m.className = 'menu'; m.setAttribute('role', 'menu');
   m.innerHTML = `<button role="menuitem" id="dupBtn">${icon('copy')}複製する</button>
                  <button role="menuitem" class="danger" id="delBtn">${icon('trash')}削除する</button>`;
-  app.appendChild(m);
+  app.querySelector('.screen').appendChild(m);
   m.querySelector('#dupBtn').onclick = () => {
     const nb = { id: newId(), name: b.name + 'のコピー', colors: { ...b.colors } };
     bottles.push(nb); persist(); toast('複製しました'); go('#/bottle/' + nb.id);
@@ -311,7 +325,7 @@ function renderEditor(id) {
   const grains = [[20, 90, 150], [210, 170, 120], [40, 300, 110], [250, 410, 100], [90, 500, 140]];
   const mound = { base: [42, 30], main: [32, 20], accent: [19, 11] };
 
-  app.innerHTML = `
+  app.innerHTML = `<div class="screen" data-h="826">
   <header class="hdr">
     <button class="circle-btn" id="backBtn" aria-label="戻る">${icon('back')}</button>
     <label class="title-edit">
@@ -377,7 +391,8 @@ function renderEditor(id) {
       <ellipse cx="34" cy="13" rx="20" ry="5" fill="#E3C384" stroke="#9C7A3C" stroke-width="1.5"/>
       <ellipse id="scoopSand" cx="34" cy="12" rx="15" ry="3.5" fill="transparent"/>
     </svg>
-  </div>`;
+  </div></div>`;
+  fit();
 
   const $ = s => app.querySelector(s);
   $('#backBtn').onclick = () => go(ed.id ? '#/bottle/' + ed.id : '#/');
@@ -479,7 +494,7 @@ function selectRole(k, animate) {
 // ----- scoop / geometry helpers -----
 function rel(el) {
   const b = app.querySelector('#bench').getBoundingClientRect(), r = el.getBoundingClientRect();
-  return { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height };
+  return { x: (r.left - b.left) / K, y: (r.top - b.top) / K, w: r.width / K, h: r.height / K };
 }
 function wellTarget(k) {
   const r = rel(app.querySelector(`.well[data-role="${k}"]`));
@@ -495,7 +510,11 @@ function animScoop(p, dur, easing = 'ease-in-out') {
   s.style.transform = scoopT(p);
   return s.animate([{ transform: from }, { transform: scoopT(p) }], { duration: dur * SPEED, easing }).finished.catch(() => {});
 }
-window.addEventListener('resize', () => { if (view === 'editor' && !busy) placeScoop(wellTarget(ed.role)); });
+window.addEventListener('resize', () => {
+  if (busy) return;
+  fit();
+  if (view === 'editor') placeScoop(wellTarget(ed.role));
+});
 
 // ----- 完成演出 -----
 async function fillAndFinish() {
@@ -504,7 +523,6 @@ async function fillAndFinish() {
   const bench = app.querySelector('#bench');
   bench.classList.add('busy');
   document.activeElement && document.activeElement.blur();
-  window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
   await wait(250 * SPEED);
 
   const c = { ...ed.colors };
@@ -627,7 +645,6 @@ function route() {
   else if (h === '#/new') renderEditor(null);
   else if ((m = h.match(/^#\/edit\/(.+)$/))) renderEditor(decodeURIComponent(m[1]));
   else renderShelf();
-  window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);
 route();

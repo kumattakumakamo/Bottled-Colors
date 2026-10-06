@@ -26,7 +26,7 @@
 }
 
 * { box-sizing: border-box; }
-html, body { margin: 0; }
+html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; }
 body {
   background: var(--outside);
   color: var(--ink);
@@ -39,13 +39,22 @@ button, input { font: inherit; color: inherit; }
 button { cursor: pointer; border: 0; background: none; padding: 0; }
 
 .app {
+  width: 100%;
   max-width: 430px;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   margin: 0 auto;
   background: var(--bg);
   position: relative;
-  overflow-x: hidden;
+  overflow: hidden;
 }
+/* 各画面は設計サイズ（幅390）で組み、端末に収まる倍率で縮める。余った幅・高さはレイアウト側で埋める */
+.screen {
+  position: absolute; left: 0; top: 0;
+  transform-origin: 0 0;
+  display: flex; flex-direction: column;
+}
+.hdr, .shelf-hint, .bottle-name, .bottle-meta, .palette, .copy-all, .detail-stage { flex: none; }
 @media (min-width: 520px) {
   .app { box-shadow: 0 0 0 1px rgba(0,0,0,.04), 0 20px 60px rgba(90, 60, 30, .12); }
 }
@@ -78,12 +87,13 @@ button { cursor: pointer; border: 0; background: none; padding: 0; }
 .hdr-spacer { width: 44px; flex: none; }
 
 /* ---------- 1. shelf ---------- */
-.cabinet { margin: 4px 8px 0; position: relative; }
+.cabinet { margin: 4px 8px 0; position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .crown, .cab-base {
   position: relative;
   border: 1.5px solid var(--wood-line);
   background: var(--wood-front);
   z-index: 4;
+  flex: none;
 }
 .crown { height: 20px; border-radius: 6px; box-shadow: 0 4px 0 rgba(0,0,0,.08); }
 .crown::before {
@@ -103,7 +113,10 @@ button { cursor: pointer; border: 0; background: none; padding: 0; }
   outline: 1.5px solid var(--wood-line);
   outline-offset: -1px;
   position: relative;
+  flex: 1; min-height: 0;
+  overflow-y: auto; scrollbar-width: none;
 }
+.cab-body::-webkit-scrollbar { display: none; }
 .shelf-row { position: relative; }
 .slots {
   height: 164px;
@@ -188,7 +201,7 @@ button { cursor: pointer; border: 0; background: none; padding: 0; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .plate.small { font-size: 10px; }
-.shelf-hint { text-align: center; color: var(--sub); font-size: 12px; margin: 26px 0 0; padding-bottom: 40px; }
+.shelf-hint { text-align: center; color: var(--sub); font-size: 12px; margin: 14px 0 18px; }
 
 /* ---------- 2. editor (workbench) ---------- */
 .title-edit {
@@ -206,16 +219,17 @@ button { cursor: pointer; border: 0; background: none; padding: 0; }
 .title-edit input:focus { outline: none; background: rgba(255,255,255,.6); }
 .title-edit svg { width: 15px; height: 15px; flex: none; color: var(--sub); }
 
-.bench { position: relative; }
+.bench { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .bench.busy { pointer-events: none; }
-.wall { height: 210px; }
+.wall { height: 210px; flex: none; }
 .table {
   position: relative; z-index: 1;
   background: var(--table);
   border-top: 3px solid var(--wood-line);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
-  padding: 52px 16px 20px;
-  min-height: calc(100dvh - 310px);
+  padding: 52px 16px 16px;
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
 }
 .tray, .tray-labels, .tool { position: relative; z-index: 1; }
 .grain { position: absolute; z-index: 0; height: 1px; background: rgba(122, 78, 38, .1); border-radius: 1px; }
@@ -345,7 +359,7 @@ input[type=range]::-moz-range-thumb {
 }
 input[type=range]:focus-visible { outline: 2px solid var(--btn); outline-offset: 4px; }
 
-.cta-wrap { position: sticky; bottom: 16px; margin-top: 24px; z-index: 5; }
+.cta-wrap { margin-top: auto; padding-top: 18px; position: relative; z-index: 5; }
 .cta {
   width: 100%; height: 56px; border-radius: 18px;
   background: var(--btn); color: #fff;
@@ -406,7 +420,7 @@ input[type=range]:focus-visible { outline: 2px solid var(--btn); outline-offset:
 .copy-btn svg { width: 18px; height: 18px; }
 .copy-all { display: flex; align-items: center; gap: 6px; margin: 14px auto 0; font-size: 12px; font-weight: 700; padding: 8px 12px; border-radius: 10px; }
 .copy-all svg { width: 14px; height: 14px; }
-.detail-cta { position: sticky; bottom: 16px; margin: 28px 16px 0; padding-bottom: 16px; z-index: 5; }
+.detail-cta { margin: auto 16px 16px; padding-top: 20px; position: relative; z-index: 5; }
 
 .menu {
   position: absolute; z-index: 20; right: 20px; top: 84px;

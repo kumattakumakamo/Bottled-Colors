@@ -321,7 +321,8 @@ button { cursor: pointer; border: 0; background: none; padding: 0; }
 .wheel { --size: 140px; position: relative; width: var(--size); height: var(--size); flex: none; touch-action: none; }
 .wheel-ring {
   position: absolute; inset: 0; border-radius: 50%;
-  background: conic-gradient(from 90deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+  /* 右を赤(0°)として、上へ（反時計回りに）黄→緑→シアン→青→マゼンタ */
+  background: conic-gradient(from 90deg, #f00, #f0f, #00f, #0ff, #0f0, #ff0, #f00);
   -webkit-mask: radial-gradient(circle, transparent calc(var(--size) * .36), #000 calc(var(--size) * .36 + .5px));
           mask: radial-gradient(circle, transparent calc(var(--size) * .36), #000 calc(var(--size) * .36 + .5px));
 }

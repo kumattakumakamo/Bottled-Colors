@@ -566,7 +566,7 @@ function renderEditor(id) {
     const r = wheel.getBoundingClientRect();
     const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
     if (start && Math.hypot(dx, dy) < r.width * .30) return false;
-    let h = Math.atan2(dy, dx) * 180 / Math.PI; if (h < 0) h += 360;
+    let h = Math.atan2(-dy, dx) * 180 / Math.PI; if (h < 0) h += 360;   // 上に行くほど色相が進む
     ed.hsv.h = Math.round(h) % 360; fromHsv(); return true;
   });
   dragOn(sv, e => {
@@ -596,7 +596,7 @@ function syncTool() {
   if (document.activeElement !== $('#hexInput')) $('#hexInput').value = hex;
   $('#sv').style.setProperty('--hue', `hsl(${h} 100% 50%)`);
   const rad = h * Math.PI / 180, mid = 43;
-  Object.assign($('#hueKnob').style, { left: 50 + mid * Math.cos(rad) + '%', top: 50 + mid * Math.sin(rad) + '%', background: hsvToHex(h, 100, 100) });
+  Object.assign($('#hueKnob').style, { left: 50 + mid * Math.cos(rad) + '%', top: 50 - mid * Math.sin(rad) + '%', background: hsvToHex(h, 100, 100) });
   $('#hueKnob').style.background = hex;
   Object.assign($('#svKnob').style, { left: 26 + 48 * s / 100 + '%', top: 26 + 48 * (1 - v / 100) + '%' });
   const tracks = {

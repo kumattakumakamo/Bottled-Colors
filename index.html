@@ -1,89 +1,18 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Color Jar</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F7EEE2">
+  <title>My Color Shelf</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600&family=Kiwi+Maru:wght@500&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app-shell">
-    <header class="topbar">
-      <button class="icon-button" id="backBtn" aria-label="戻る" hidden>←</button>
-      <div class="brand">Color Jar <span>✦</span></div>
-      <button class="icon-button" id="newBtn" aria-label="新しい瓶を作る">＋</button>
-    </header>
-
-    <section id="shelfView" class="view active">
-      <div class="hero-copy">
-        <p class="eyebrow">MY COLOR SHELF</p>
-        <h1>好きな3色を、<br>小さな瓶にしまおう。</h1>
-        <p>75%・20%・5%のバランスで、配色を眺めて残せます。</p>
-      </div>
-      <div class="shelf" id="shelfGrid"></div>
-      <button class="primary large" id="createFirstBtn">＋ 新しい瓶を作る</button>
-    </section>
-
-    <section id="editorView" class="view">
-      <div class="editor-layout">
-        <div class="preview-panel">
-          <div class="bottle-wrap">
-            <div class="sparkle s1">✦</div><div class="sparkle s2">✧</div>
-            <div class="bottle large-bottle" aria-label="75 20 5プレビュー">
-              <div class="cork"></div>
-              <div class="glass">
-                <div class="sand layer accent" data-layer="accent"></div>
-                <div class="sand layer sub" data-layer="sub"></div>
-                <div class="sand layer base" data-layer="base"></div>
-              </div>
-            </div>
-            <div class="ratio-labels"><span>75%</span><span>20%</span><span>5%</span></div>
-          </div>
-
-          <div class="color-tabs" id="colorTabs">
-            <button class="color-tab active" data-role="base"><span class="mini-jar"></span><small>ベース</small><b>75%</b></button>
-            <button class="color-tab" data-role="sub"><span class="mini-jar"></span><small>サブ</small><b>20%</b></button>
-            <button class="color-tab" data-role="accent"><span class="mini-jar"></span><small>アクセント</small><b>5%</b></button>
-          </div>
-        </div>
-
-        <div class="controls-panel">
-          <p class="section-kicker">COLOR LAB</p>
-          <div class="picker-row">
-            <div id="hueWheel" class="hue-wheel" aria-label="カラーサークル"><div class="wheel-inner"></div><div id="huePointer" class="pointer wheel-pointer"></div></div>
-            <div id="svSquare" class="sv-square" aria-label="彩度と明度"><div id="svPointer" class="pointer sv-pointer"></div></div>
-          </div>
-
-          <div class="sliders">
-            <label><span>H</span><input id="hRange" type="range" min="0" max="360" value="10"><output id="hOut">10</output></label>
-            <label><span>S</span><input id="sRange" type="range" min="0" max="100" value="72"><output id="sOut">72</output></label>
-            <label><span>V</span><input id="vRange" type="range" min="0" max="100" value="92"><output id="vOut">92</output></label>
-          </div>
-
-          <label class="hex-field"><span>HEX</span><input id="hexInput" value="#EA7A62" maxlength="7"><button id="copyHexBtn" type="button">⧉</button></label>
-
-          <label class="name-field"><span>この瓶に名前をつける</span><input id="nameInput" placeholder="例：夕暮れの海" maxlength="30"></label>
-          <button class="primary save-button" id="saveBtn">瓶を棚にしまう</button>
-        </div>
-      </div>
-    </section>
-
-    <section id="detailView" class="view">
-      <div id="detailContent"></div>
-    </section>
-  </main>
-
-  <div id="mixOverlay" class="mix-overlay" aria-hidden="true">
-    <div class="mix-card">
-      <p id="mixLabel">砂を集めています…</p>
-      <div class="mix-stage">
-        <div class="pour pour-base"></div><div class="pour pour-sub"></div><div class="pour pour-accent"></div>
-        <div class="bottle mix-bottle"><div class="cork mix-cork"></div><div class="glass"><div class="sand layer accent"></div><div class="sand layer sub"></div><div class="sand layer base"></div></div></div>
-      </div>
-    </div>
-  </div>
-
-  <div id="toast" class="toast" role="status"></div>
-  <script src="./app.js"></script>
+  <main id="app" class="app" aria-live="polite"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
 </body>
 </html>

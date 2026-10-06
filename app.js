@@ -1,61 +1,634 @@
-const STORAGE_KEY = 'color-jar-palettes-v1';
-const defaults = { base:'#EA7A62', sub:'#F4BE5D', accent:'#AF85D8' };
-let palettes = loadPalettes();
-let colors = {...defaults};
-let activeRole = 'base';
-let editingId = null;
+/* My Color Shelf
+ * 画面：#/ 棚 ／ #/new 新しい瓶 ／ #/edit/:id 瓶を編集 ／ #/bottle/:id 瓶の詳細
+ * データ：localStorage（このブラウザの中だけに保存）
+ * 配色：ベース・メイン・アクセントの固定比率 75 / 20 / 5
+ * 完成演出：スコップで アクセント→メイン→ベース の順に注ぐ → コルク → リボン → キラキラ → 完成！
+ */
+(() => {
+'use strict';
 
-const $ = s => document.querySelector(s);
-const $$ = s => [...document.querySelectorAll(s)];
-const views = { shelf:$('#shelfView'), editor:$('#editorView'), detail:$('#detailView') };
-const backBtn=$('#backBtn'), newBtn=$('#newBtn'), nameInput=$('#nameInput'), hexInput=$('#hexInput');
-const hRange=$('#hRange'), sRange=$('#sRange'), vRange=$('#vRange');
-const hOut=$('#hOut'), sOut=$('#sOut'), vOut=$('#vOut');
-const hueWheel=$('#hueWheel'), huePointer=$('#huePointer'), svSquare=$('#svSquare'), svPointer=$('#svPointer');
+// ---------------- data ----------------
+const STORE = 'my-color-shelf.v1';
+const ROLES = [['base', 'ベース'], ['main', 'メイン'], ['accent', 'アクセント']];
+const ROLE_LABEL = Object.fromEntries(ROLES);
+const DEFAULT_COLORS = { base: '#E8E2DA', main: '#B8AFA4', accent: '#7D7368' };
+const SEED = [
+  ['夕暮れの海', '#E98A6B', '#F6C470', '#C9A7E6'],
+  ['森の静けさ', '#9CC983', '#4E8A4F', '#2F5E3A'],
+  ['ソーダフロート', '#BDEBF4', '#6FD3EA', '#EAF8FB'],
+  ['カフェラテ', '#EBCB9E', '#B07A4E', '#5A3A28'],
+  ['夜の帳', '#4A5CC8', '#3040A8', '#1E2A78'],
+  ['ラベンダーミスト', '#F2C4D0', '#B79BE0', '#8F7BD1'],
+  ['ミモザ', '#F4C94A', '#F7DC7A', '#8DB36A'],
+  ['スイカソーダ', '#F2A0A8', '#F7D9DC', '#3FB39A'],
+].map(([name, base, main, accent], i) => ({ id: 'seed' + i, name, colors: { base, main, accent } }));
 
-function loadPalettes(){ try{return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]')}catch{return[]} }
-function persist(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(palettes)); }
-function uid(){ return crypto?.randomUUID?.() || String(Date.now()+Math.random()); }
-function showView(name){ Object.entries(views).forEach(([k,v])=>v.classList.toggle('active',k===name)); backBtn.hidden=name==='shelf'; newBtn.hidden=name==='editor'; }
-function toast(msg){ const t=$('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1200); }
-function hexToRgb(hex){ const m=/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);return m?{r:parseInt(m[1],16),g:parseInt(m[2],16),b:parseInt(m[3],16)}:null; }
-function rgbToHex(r,g,b){ return '#'+[r,g,b].map(v=>Math.round(v).toString(16).padStart(2,'0')).join('').toUpperCase(); }
-function rgbToHsv(r,g,b){r/=255;g/=255;b/=255;const max=Math.max(r,g,b),min=Math.min(r,g,b),d=max-min;let h=0;if(d){if(max===r)h=((g-b)/d)%6;else if(max===g)h=(b-r)/d+2;else h=(r-g)/d+4;h*=60;if(h<0)h+=360}return {h,s:max?d/max*100:0,v:max*100};}
-function hsvToRgb(h,s,v){s/=100;v/=100;const c=v*s,x=c*(1-Math.abs((h/60)%2-1)),m=v-c;let rp=0,gp=0,bp=0;if(h<60){rp=c;gp=x}else if(h<120){rp=x;gp=c}else if(h<180){gp=c;bp=x}else if(h<240){gp=x;bp=c}else if(h<300){rp=x;bp=c}else{rp=c;bp=x}return {r:(rp+m)*255,g:(gp+m)*255,b:(bp+m)*255};}
-function hsvToHex(h,s,v){const c=hsvToRgb(h,s,v);return rgbToHex(c.r,c.g,c.b)}
-function hexToHsv(hex){const rgb=hexToRgb(hex);return rgb?rgbToHsv(rgb.r,rgb.g,rgb.b):{h:0,s:0,v:0}}
-
-function updateVisuals(){
-  ['base','sub','accent'].forEach(role=>{
-    $$(`[data-layer="${role}"]`).forEach(el=>el.style.background=colors[role]);
-    const tab=$(`.color-tab[data-role="${role}"]`); if(tab) tab.style.setProperty('--mini',colors[role]);
-  });
-  const hsv=hexToHsv(colors[activeRole]);
-  hRange.value=Math.round(hsv.h);sRange.value=Math.round(hsv.s);vRange.value=Math.round(hsv.v);
-  hOut.value=Math.round(hsv.h);sOut.value=Math.round(hsv.s);vOut.value=Math.round(hsv.v);hexInput.value=colors[activeRole];
-  svSquare.style.background=`linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,hsl(${hsv.h} 100% 50%))`;
-  const rad=(hsv.h-90)*Math.PI/180,r=45;huePointer.style.left=`${50+Math.cos(rad)*r}%`;huePointer.style.top=`${50+Math.sin(rad)*r}%`;
-  svPointer.style.left=`${hsv.s}%`;svPointer.style.top=`${100-hsv.v}%`;
+let bottles = load();
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE));
+    if (Array.isArray(s)) return s;
+  } catch (e) { /* ignore */ }
+  return SEED.map(b => ({ ...b, colors: { ...b.colors } }));
 }
-function setFromHSV(){ colors[activeRole]=hsvToHex(+hRange.value,+sRange.value,+vRange.value);updateVisuals(); }
+function persist() {
+  try { localStorage.setItem(STORE, JSON.stringify(bottles)); } catch (e) { /* ignore */ }
+}
+const findBottle = id => bottles.find(b => b.id === id);
+const newId = () => 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-$$('.color-tab').forEach(btn=>btn.addEventListener('click',()=>{activeRole=btn.dataset.role;$$('.color-tab').forEach(b=>b.classList.toggle('active',b===btn));updateVisuals()}));
-[hRange,sRange,vRange].forEach(i=>i.addEventListener('input',setFromHSV));
-hexInput.addEventListener('change',()=>{let v=hexInput.value.trim();if(!v.startsWith('#'))v='#'+v;if(/^#[0-9a-fA-F]{6}$/.test(v)){colors[activeRole]=v.toUpperCase();updateVisuals()}else{toast('HEXは #RRGGBB で入力してください');updateVisuals()}});
-$('#copyHexBtn').addEventListener('click',async()=>{await navigator.clipboard?.writeText(colors[activeRole]);toast('HEXをコピーしました');});
+// ---------------- color utils ----------------
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+function hsvToHex(h, s, v) {
+  s /= 100; v /= 100;
+  const f = n => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+  return '#' + [f(5), f(3), f(1)].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+function hexToHsv(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) {
+    if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+    h *= 60; if (h < 0) h += 360;
+  }
+  return { h: Math.round(h), s: Math.round(mx ? d / mx * 100 : 0), v: Math.round(mx * 100) };
+}
+function normHex(str) {
+  let s = String(str).trim().replace(/^#/, '');
+  if (/^[0-9a-f]{3}$/i.test(s)) s = s.split('').map(c => c + c).join('');
+  return /^[0-9a-f]{6}$/i.test(s) ? '#' + s.toUpperCase() : null;
+}
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-function bindPointer(el,fn){let down=false;const act=e=>{if(!down&&e.type!=='pointerdown')return;const r=el.getBoundingClientRect();fn(e.clientX-r.left,e.clientY-r.top,r);};el.addEventListener('pointerdown',e=>{down=true;el.setPointerCapture(e.pointerId);act(e)});el.addEventListener('pointermove',act);el.addEventListener('pointerup',()=>down=false);}
-bindPointer(hueWheel,(x,y,r)=>{const cx=r.width/2,cy=r.height/2;let deg=Math.atan2(y-cy,x-cx)*180/Math.PI+90;if(deg<0)deg+=360;hRange.value=Math.round(deg);setFromHSV();});
-bindPointer(svSquare,(x,y,r)=>{sRange.value=Math.round(Math.min(1,Math.max(0,x/r.width))*100);vRange.value=Math.round((1-Math.min(1,Math.max(0,y/r.height)))*100);setFromHSV();});
+// ---------------- icons ----------------
+const ICON = {
+  back: '<path d="M13 5 6 12l7 7M6 12h13"/>',
+  menu: '<path d="M5 7h14M5 12h14M5 17h14"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  more: '<circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>',
+  copy: '<path d="M9 9h10v10H9zM5 15V5h10"/>',
+  pencil: '<path d="M5 19l1-4L16 5l3 3L9 18zM14 7l3 3"/>',
+  jar: '<path d="M9 3h6v3H9zM7 8h10v12H7z"/>',
+  trash: '<path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12M10 10v6M14 10v6"/>',
+};
+const icon = (k, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${extra}>${ICON[k]}</svg>`;
 
-function bottleHTML(p,cls=''){return `<div class="bottle ${cls}"><div class="cork"></div><div class="glass"><div class="sand layer accent" style="background:${p.colors.accent}"></div><div class="sand layer sub" style="background:${p.colors.sub}"></div><div class="sand layer base" style="background:${p.colors.base}"></div></div></div>`}
-function renderShelf(){const grid=$('#shelfGrid');if(!palettes.length){grid.innerHTML='<div class="empty-note">まだ瓶がありません。<br>最初の3色を作ってみよう ✦</div>';return}grid.innerHTML=palettes.map(p=>`<button class="shelf-card" data-id="${p.id}">${bottleHTML(p)}<h3>${escapeHTML(p.name)}</h3></button>`).join('');$$('.shelf-card').forEach(b=>b.addEventListener('click',()=>openDetail(b.dataset.id)));}
-function escapeHTML(s){return s.replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-function openEditor(p=null){editingId=p?.id||null;colors=p?{...p.colors}:{...defaults};nameInput.value=p?.name||'';activeRole='base';$$('.color-tab').forEach(b=>b.classList.toggle('active',b.dataset.role==='base'));showView('editor');updateVisuals();}
-function openDetail(id){const p=palettes.find(x=>x.id===id);if(!p)return;$('#detailContent').innerHTML=`<div class="detail-card">${bottleHTML(p,'large-bottle')}<h2>${escapeHTML(p.name)}</h2><div class="swatches">${['base','sub','accent'].map(r=>`<div class="swatch"><div class="chip" style="background:${p.colors[r]}"></div><button class="secondary copy-color" data-hex="${p.colors[r]}">${p.colors[r]} ⧉</button></div>`).join('')}</div><div class="actions"><button class="secondary" id="editPalette">編集する</button><button class="secondary" id="duplicatePalette">複製する</button><button class="danger" id="deletePalette">削除する</button></div></div>`;showView('detail');$$('.copy-color').forEach(b=>b.onclick=async()=>{await navigator.clipboard?.writeText(b.dataset.hex);toast('HEXをコピーしました')});$('#editPalette').onclick=()=>openEditor(p);$('#duplicatePalette').onclick=()=>{openEditor({...p,id:null,name:p.name+' copy'});editingId=null};$('#deletePalette').onclick=()=>{if(confirm(`「${p.name}」を削除しますか？`)){palettes=palettes.filter(x=>x.id!==p.id);persist();renderShelf();showView('shelf')}};}
+// ---------------- bottle drawing ----------------
+// 80 x 112 の座標系（Figmaのボトルと同じ寸法）
+const BODY = 'M4 55C4 41.7 14.7 31 28 31H52C65.3 31 76 41.7 76 55V91C76 102 67 111 56 111H24C13 111 4 102 4 91Z';
+// 砂の高さ：ガラス内側のクリーム色の帯（底から3.6）の上に、ベース75 / メイン20 / アクセント5 を積む（下からアクセント→メイン→ベース）
+const SAND_BOTTOM = 107.4, SAND_H = 60;
+const LAYERS = {
+  accent: [SAND_BOTTOM - SAND_H * .05, SAND_H * .05],
+  main: [SAND_BOTTOM - SAND_H * .25, SAND_H * .20],
+  base: [SAND_BOTTOM - SAND_H, SAND_H * .75],
+};
+const GLITTER = [[.30, .35], [.62, .55], [.78, .25], [.45, .80], [.22, .70]];
+const layerAt = y => (y >= LAYERS.accent[0] ? 'accent' : y >= LAYERS.main[0] ? 'main' : 'base');
 
-async function saveWithAnimation(){const name=nameInput.value.trim();if(!name){toast('瓶に名前をつけてください');nameInput.focus();return}const overlay=$('#mixOverlay'), label=$('#mixLabel');overlay.style.setProperty('--base',colors.base);overlay.style.setProperty('--sub',colors.sub);overlay.style.setProperty('--accent',colors.accent);overlay.querySelectorAll('.base').forEach(e=>e.style.background=colors.base);overlay.querySelectorAll('.sub').forEach(e=>e.style.background=colors.sub);overlay.querySelectorAll('.accent').forEach(e=>e.style.background=colors.accent);overlay.className='mix-overlay show';overlay.setAttribute('aria-hidden','false');const wait=ms=>new Promise(r=>setTimeout(r,ms));label.textContent='75%の砂を注いでいます…';overlay.classList.add('phase-base');await wait(700);label.textContent='20%を重ねます…';overlay.classList.add('phase-sub');await wait(540);label.textContent='最後に5%のアクセント…';overlay.classList.add('phase-accent');await wait(460);label.textContent='瓶を閉じます ✦';overlay.classList.add('phase-cork');await wait(500);
-  const now=new Date().toISOString();if(editingId){const i=palettes.findIndex(p=>p.id===editingId);palettes[i]={...palettes[i],name,colors:{...colors},updatedAt:now};}else{palettes.push({id:uid(),name,colors:{...colors},createdAt:now,updatedAt:now});}persist();renderShelf();overlay.className='mix-overlay';overlay.setAttribute('aria-hidden','true');showView('shelf');toast('棚にしまいました ✦');}
-$('#saveBtn').addEventListener('click',saveWithAnimation);
-$('#newBtn').addEventListener('click',()=>openEditor());$('#createFirstBtn').addEventListener('click',()=>openEditor());backBtn.addEventListener('click',()=>{renderShelf();showView('shelf')});
-renderShelf();updateVisuals();
+function star4(cx, cy, R, fill, extra = '') {
+  const r = R * .32; let d = '';
+  for (let i = 0; i < 8; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 4, rad = i % 2 ? r : R;
+    d += (i ? 'L' : 'M') + (cx + rad * Math.cos(a)).toFixed(2) + ' ' + (cy + rad * Math.sin(a)).toFixed(2);
+  }
+  return `<path d="${d}Z" fill="${fill}" ${extra}/>`;
+}
+
+let uid = 0;
+function bottleSVG(c, { cork = true, ribbon = true, glitter = true, guides = false, cls = '' } = {}) {
+  const id = 'bt' + (++uid);
+  const sand = ['accent', 'main', 'base'].map(k => {
+    const [y, h] = LAYERS[k];
+    return `<rect class="sand sand-${k}" x="4" y="${y}" width="72" height="${(k === 'accent' ? h + 4 : h + .4).toFixed(1)}" fill="${c[k]}"/>`;
+  }).join('');
+  // きらめき：乗っている層とは別の層の色を使う（優先：アクセント→メイン→ベース）
+  const gl = GLITTER.map(([px, py], i) => {
+    const x = 4 + 72 * px, y = LAYERS.base[0] + SAND_H * .92 * py, here = c[layerAt(y)].toUpperCase();
+    const pick = ['accent', 'main', 'base'].map(k => c[k]).find(h => h.toUpperCase() !== here);
+    if (!pick) return '';
+    return i === 2 ? star4(x, y, 2.5, pick) : `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r=".9" fill="${pick}"/>`;
+  }).join('');
+  const a = c.accent;
+  return `<svg class="${cls}" viewBox="0 0 80 112" aria-hidden="true">
+  <defs><clipPath id="${id}"><path d="${BODY}"/></clipPath></defs>
+  <path d="${BODY}" fill="rgba(255,255,255,.5)"/>
+  <g clip-path="url(#${id})">
+    ${sand}
+    <g class="glitter" style="opacity:${glitter ? 1 : 0}">${gl}</g>
+    <path d="${BODY}" fill="none" stroke="#F7EDE0" stroke-width="7.2"/>
+    <rect x="13" y="43" width="6" height="44" rx="3" fill="#fff" fill-opacity=".55"/>
+    ${guides ? `<g class="guides" stroke="rgba(0,0,0,.18)" stroke-width=".5" stroke-dasharray="2 2">${['base', 'main', 'accent'].map(k => LAYERS[k][0]).map(y => `<line x1="14" x2="66" y1="${y}" y2="${y}"/>`).join('')}</g>` : ''}
+  </g>
+  <path d="${BODY}" fill="none" stroke="#CDBBA6" stroke-width="1.5"/>
+  <rect x="26" y="15" width="28" height="18" fill="rgba(255,255,255,.5)" stroke="#CDBBA6" stroke-width="1.5"/>
+  <rect x="22" y="24" width="36" height="7" rx="3.5" fill="rgba(255,255,255,.75)" stroke="#CDBBA6" stroke-width="1.5"/>
+  <g class="cork" style="opacity:${cork ? 1 : 0}"><rect x="25" y="0" width="30" height="19" rx="5" fill="#C49063"/><rect x="25" y="0" width="30" height="5" rx="3" fill="#DDB184"/></g>
+  <g class="ribbon" style="opacity:${ribbon ? 1 : 0}" stroke="#B49B82" stroke-width=".6">
+    <rect x="26" y="19.5" width="28" height="4" fill="${a}"/>
+    <ellipse cx="55.5" cy="19" rx="3.5" ry="2.5" fill="${a}"/>
+    <ellipse cx="55.5" cy="24" rx="3.5" ry="2.5" fill="${a}"/>
+    <rect x="55" y="23" width="2.2" height="8" rx="1" fill="${a}" transform="rotate(18 56 27)"/>
+    <rect x="53" y="23" width="2.2" height="7" rx="1" fill="${a}" transform="rotate(-12 54 26)"/>
+    <circle cx="54.5" cy="21.5" r="2.2" fill="${a}"/>
+  </g>
+</svg>`;
+}
+
+// 飾り窓の中の「光の弧」（ベース色）とキラキラ（その瓶の色だけ）
+function archPath(W, r, ext) {
+  const k = .5523, cx = W / 2, cy = W / 2;
+  return `M${cx - r} ${cy + ext}L${cx - r} ${cy}C${cx - r} ${cy - k * r} ${cx - k * r} ${cy - r} ${cx} ${cy - r}C${cx + k * r} ${cy - r} ${cx + r} ${cy - k * r} ${cx + r} ${cy}L${cx + r} ${cy + ext}`;
+}
+function nicheDeco(c, big = false) {
+  if (big) {
+    const W = 200, H = 264;
+    return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">
+      <path d="${archPath(W, 88, 120)}" fill="none" stroke="${c.base}" stroke-width="3.5" stroke-linecap="round"/>
+      ${star4(156, 52, 8, c.base)}${star4(42, 70, 5.5, c.accent)}<circle cx="52.5" cy="44.5" r="2.5" fill="${c.main}"/>
+    </svg>`;
+  }
+  const W = 94, H = 155, m = W / 2;
+  return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">
+    <path d="${archPath(W, 36, 16)}" fill="none" stroke="${c.base}" stroke-width="2.5" stroke-linecap="round"/>
+    ${star4(m + 23, 30, 5, c.base)}${star4(m - 25, 44, 3.5, c.accent)}<circle cx="${m - 18}" cy="28" r="1.5" fill="${c.main}"/>
+  </svg>`;
+}
+
+// ---------------- app shell ----------------
+const app = document.getElementById('app');
+const toastEl = document.getElementById('toast');
+let toastTimer;
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1600);
+}
+async function copyText(t, msg = 'コピーしました') {
+  try { await navigator.clipboard.writeText(t); toast(msg); }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast(msg); } catch (_) { toast('コピーできませんでした'); }
+    ta.remove();
+  }
+}
+const go = h => { location.hash = h; };
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SPEED = reduced ? .2 : 1;
+const wait = ms => new Promise(r => setTimeout(r, ms));
+let view = '';
+
+// ================= 1. shelf =================
+function renderShelf() {
+  view = 'shelf';
+  const items = [...bottles, null];
+  const rows = [];
+  for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
+  app.innerHTML = `
+  <header class="hdr">
+    <button class="circle-btn" id="menuBtn" aria-label="メニュー">${icon('menu')}</button>
+    <h1 class="hdr-title">My Color Shelf</h1>
+    <button class="circle-btn" id="addBtn" aria-label="新しい瓶をつくる">${icon('plus')}</button>
+  </header>
+  <section class="cabinet" aria-label="コレクション棚">
+    <div class="crown"></div>
+    <div class="cab-body">
+      ${rows.map(row => `
+      <div class="shelf-row">
+        <div class="slots">
+          ${[0, 1, 2].map(j => {
+            const b = row[j];
+            if (b === undefined) return '<div class="slot"></div>';
+            if (b === null) return `<div class="slot"><div class="niche-rim"></div><div class="niche"></div>
+              <button class="new-slot" data-new aria-label="新しい瓶をつくる">${icon('plus')}New Bottle</button></div>`;
+            return `<div class="slot"><div class="niche-rim"></div><div class="niche">${nicheDeco(b.colors)}</div>
+              <div class="contact"></div>
+              <button class="bottle-btn" data-id="${b.id}" aria-label="${esc(b.name)}を開く">${bottleSVG(b.colors)}</button></div>`;
+          }).join('')}
+        </div>
+        <div class="board"><div class="board-top"></div><div class="board-front"><div class="plates">
+          ${[0, 1, 2].map(j => {
+            const b = row[j];
+            return b ? `<div class="plate${[...b.name].length > 6 ? ' small' : ''}" title="${esc(b.name)}">${esc(b.name)}</div>` : '<span></span>';
+          }).join('')}
+        </div></div></div>
+      </div>`).join('')}
+    </div>
+    <div class="cab-base"></div>
+  </section>
+  <p class="shelf-hint">瓶をタップして開く</p>`;
+  app.querySelector('#menuBtn').onclick = () => toast('メニューは準備中です');
+  app.querySelector('#addBtn').onclick = () => go('#/new');
+  app.querySelectorAll('[data-new]').forEach(b => b.onclick = () => go('#/new'));
+  app.querySelectorAll('[data-id]').forEach(b => b.onclick = () => go('#/bottle/' + b.dataset.id));
+}
+
+// ================= 3. detail =================
+function renderDetail(id) {
+  const b = findBottle(id);
+  if (!b) return go('#/');
+  view = 'detail';
+  const c = b.colors;
+  app.innerHTML = `
+  <header class="hdr">
+    <button class="circle-btn" id="backBtn" aria-label="棚に戻る">${icon('back')}</button>
+    <button class="circle-btn" id="moreBtn" aria-label="その他の操作" aria-haspopup="menu">${icon('more')}</button>
+  </header>
+  <div class="detail-stage">
+    <div class="niche-rim"></div><div class="niche">${nicheDeco(c, true)}</div>
+    <div class="detail-board board"><div class="board-top"></div><div class="board-front"></div></div>
+    <div class="contact"></div>
+    <div class="detail-bottle">${bottleSVG(c)}</div>
+  </div>
+  <h2 class="bottle-name">${esc(b.name)}</h2>
+  <p class="bottle-meta">3色のパレット</p>
+  <section class="palette" aria-label="パレット">
+    ${ROLES.map(([k, label]) => `
+    <div class="color-row">
+      <div class="swatch" style="background:${c[k]}"></div>
+      <div class="color-text"><div class="color-hex">${c[k]}</div><div class="color-role">${label}</div></div>
+      <button class="copy-btn" data-copy="${c[k]}" aria-label="${label}の${c[k]}をコピー">${icon('copy')}</button>
+    </div>`).join('')}
+  </section>
+  <button class="copy-all" id="copyAll">${icon('copy')}HEXをまとめてコピー</button>
+  <div class="detail-cta"><button class="cta" id="editBtn">${icon('pencil')}編集する</button></div>`;
+
+  app.querySelector('#backBtn').onclick = () => go('#/');
+  app.querySelector('#editBtn').onclick = () => go('#/edit/' + b.id);
+  app.querySelectorAll('[data-copy]').forEach(el => el.onclick = () => copyText(el.dataset.copy, el.dataset.copy + ' をコピーしました'));
+  app.querySelector('#copyAll').onclick = () => copyText(ROLES.map(([k, l]) => `${l} ${c[k]}`).join('\n'), '3色をコピーしました');
+  app.querySelector('#moreBtn').onclick = e => { e.stopPropagation(); toggleMenu(b); };
+}
+function toggleMenu(b) {
+  const old = app.querySelector('.menu');
+  if (old) { old.remove(); return; }
+  const m = document.createElement('div');
+  m.className = 'menu'; m.setAttribute('role', 'menu');
+  m.innerHTML = `<button role="menuitem" id="dupBtn">${icon('copy')}複製する</button>
+                 <button role="menuitem" class="danger" id="delBtn">${icon('trash')}削除する</button>`;
+  app.appendChild(m);
+  m.querySelector('#dupBtn').onclick = () => {
+    const nb = { id: newId(), name: b.name + 'のコピー', colors: { ...b.colors } };
+    bottles.push(nb); persist(); toast('複製しました'); go('#/bottle/' + nb.id);
+  };
+  m.querySelector('#delBtn').onclick = () => { m.remove(); confirmDelete(b); };
+  setTimeout(() => document.addEventListener('click', function close(ev) {
+    if (!m.contains(ev.target)) { m.remove(); document.removeEventListener('click', close); }
+  }), 0);
+}
+function confirmDelete(b) {
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="mt">
+    <h3 id="mt">「${esc(b.name)}」を削除しますか？</h3>
+    <p>削除した瓶は元に戻せません。</p>
+    <div class="modal-actions"><button class="ghost" id="cancel">やめる</button><button class="danger" id="ok">削除する</button></div>
+  </div>`;
+  document.body.appendChild(back);
+  back.querySelector('#cancel').onclick = () => back.remove();
+  back.onclick = e => { if (e.target === back) back.remove(); };
+  back.querySelector('#ok').onclick = () => {
+    bottles = bottles.filter(x => x.id !== b.id); persist(); back.remove(); toast('削除しました'); go('#/');
+  };
+  back.querySelector('#ok').focus();
+}
+
+// ================= 2. editor (workbench) =================
+let ed = null;      // { id, name, colors, role, hsv }
+let busy = false;
+let scoopPos = { x: 0, y: 0, a: -28 };
+
+function renderEditor(id) {
+  const src = id ? findBottle(id) : null;
+  if (id && !src) return go('#/');
+  view = 'editor';
+  busy = false;
+  ed = { id: id || null, name: src ? src.name : '', colors: src ? { ...src.colors } : { ...DEFAULT_COLORS }, role: 'base' };
+  ed.hsv = hexToHsv(ed.colors.base);
+  const grains = [[20, 90, 150], [210, 170, 120], [40, 300, 110], [250, 410, 100], [90, 500, 140]];
+  const mound = { base: [42, 30], main: [32, 20], accent: [19, 11] };
+
+  app.innerHTML = `
+  <header class="hdr">
+    <button class="circle-btn" id="backBtn" aria-label="戻る">${icon('back')}</button>
+    <label class="title-edit">
+      <input id="nameInput" maxlength="16" placeholder="瓶の名前" value="${esc(ed.name)}" aria-label="瓶の名前">
+      ${icon('pencil')}
+    </label>
+    <span class="hdr-spacer"></span>
+  </header>
+  <div class="bench" id="bench">
+    <div class="wall"></div>
+    <div class="table">
+      ${grains.map(([x, y, w]) => `<span class="grain" style="left:${x}px;top:${y}px;width:${w}px"></span>`).join('')}
+      <div class="tray" role="radiogroup" aria-label="配色">
+        ${ROLES.map(([k, label]) => `
+        <button class="well${k === 'base' ? ' sel' : ''}" data-role="${k}" role="radio" aria-checked="${k === 'base'}" aria-label="${label}">
+          <svg viewBox="0 0 100 64" preserveAspectRatio="none"><ellipse class="mound" cx="50" cy="52" rx="${mound[k][0]}" ry="${mound[k][1]}" fill="${ed.colors[k]}"/></svg>
+        </button>`).join('')}
+      </div>
+      <div class="tray-labels">${ROLES.map(([k, label]) => `<span data-label="${k}" class="${k === 'base' ? 'sel' : ''}">${label}</span>`).join('')}</div>
+
+      <section class="tool" id="tool" aria-label="色をえらぶ">
+        <div class="tool-head">
+          <div class="chip"></div>
+          <div>
+            <div class="tool-title" id="toolTitle">ベースの色</div>
+            <div class="hex-row">
+              <input id="hexInput" maxlength="7" spellcheck="false" aria-label="HEX">
+              <button class="icon-btn" id="copyHex" aria-label="HEXをコピー">${icon('copy')}</button>
+            </div>
+          </div>
+        </div>
+        <div class="tool-body">
+          <div class="wheel" id="wheel">
+            <div class="wheel-ring" id="ring"></div>
+            <div class="sv" id="sv"></div>
+            <div class="knob hue-knob" id="hueKnob"></div>
+            <div class="knob sv-knob" id="svKnob"></div>
+          </div>
+          <div class="sliders">
+            ${[['h', '色相', 360], ['s', '彩度', 100], ['v', '明度', 100]].map(([k, label, max]) => `
+            <div>
+              <div class="slider-label" id="lb-${k}">${label}</div>
+              <div class="slider-row">
+                <input type="range" id="r-${k}" min="0" max="${max}" step="1" aria-labelledby="lb-${k}">
+                <input type="number" id="n-${k}" min="0" max="${max}" step="1" inputmode="numeric" aria-label="${label}の数値">
+              </div>
+            </div>`).join('')}
+          </div>
+        </div>
+      </section>
+
+      <div class="cta-wrap"><button class="cta" id="fillBtn">${icon('jar')}瓶に詰める</button></div>
+    </div>
+    <div class="bottle-stage" id="stage">${bottleSVG(ed.colors, { cork: false, ribbon: false, glitter: false, guides: true, cls: 'edit-bottle' })}</div>
+    <div class="bench-contact"></div>
+    <div class="cork-aside" id="corkAside"></div>
+    <div class="stream" id="stream"></div>
+    <svg class="scoop" id="scoop" viewBox="0 0 120 60" aria-hidden="true">
+      <rect x="60" y="20" width="56" height="10" rx="5" fill="#7A4E2A"/>
+      <rect x="96" y="22" width="16" height="2" rx="1" fill="#fff" fill-opacity=".3"/>
+      <rect x="52" y="19" width="10" height="12" rx="2" fill="#B08A45"/>
+      <path d="M15.14 12A20 19.5 0 1 0 52.86 12Z" fill="#C9A15B" stroke="#9C7A3C" stroke-width="1.5"/>
+      <ellipse cx="34" cy="13" rx="20" ry="5" fill="#E3C384" stroke="#9C7A3C" stroke-width="1.5"/>
+      <ellipse id="scoopSand" cx="34" cy="12" rx="15" ry="3.5" fill="transparent"/>
+    </svg>
+  </div>`;
+
+  const $ = s => app.querySelector(s);
+  $('#backBtn').onclick = () => go(ed.id ? '#/bottle/' + ed.id : '#/');
+  const nameInput = $('#nameInput');
+  const fitName = () => { nameInput.style.width = Math.max(5, [...(nameInput.value || nameInput.placeholder)].length) * 18 + 16 + 'px'; };
+  nameInput.oninput = e => { ed.name = e.target.value; fitName(); };
+  fitName();
+  app.querySelectorAll('.well').forEach(w => w.onclick = () => selectRole(w.dataset.role, true));
+  $('#fillBtn').onclick = fillAndFinish;
+  $('#copyHex').onclick = () => copyText(ed.colors[ed.role], ed.colors[ed.role] + ' をコピーしました');
+
+  // HEX直接入力：入力したHEXをそのまま採用する
+  const hexInput = $('#hexInput');
+  const applyHex = () => {
+    const h = normHex(hexInput.value);
+    if (!h) { hexInput.value = ed.colors[ed.role]; return; }
+    ed.hsv = hexToHsv(h); setRoleColor(h);
+  };
+  hexInput.onchange = applyHex;
+  hexInput.onkeydown = e => { if (e.key === 'Enter') { applyHex(); hexInput.blur(); } };
+
+  // sliders + numbers
+  ['h', 's', 'v'].forEach(k => {
+    const r = $('#r-' + k), n = $('#n-' + k), max = k === 'h' ? 360 : 100;
+    r.oninput = () => { ed.hsv[k] = +r.value; fromHsv(); };
+    n.onchange = () => { ed.hsv[k] = clamp(Math.round(+n.value || 0), 0, max); fromHsv(); };
+  });
+
+  // wheel (hue ring) and SV square
+  const wheel = $('#wheel'), sv = $('#sv');
+  const dragOn = (el, fn) => {
+    el.addEventListener('pointerdown', e => {
+      if (!fn(e, true)) return;
+      el.setPointerCapture(e.pointerId);
+      const move = ev => fn(ev, false);
+      const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); };
+      el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+      e.preventDefault();
+    });
+  };
+  dragOn(wheel, (e, start) => {
+    if (e.target === sv) return false;
+    const r = wheel.getBoundingClientRect();
+    const dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+    if (start && Math.hypot(dx, dy) < r.width * .30) return false;
+    let h = Math.atan2(dy, dx) * 180 / Math.PI; if (h < 0) h += 360;
+    ed.hsv.h = Math.round(h) % 360; fromHsv(); return true;
+  });
+  dragOn(sv, e => {
+    const r = sv.getBoundingClientRect();
+    ed.hsv.s = Math.round(clamp((e.clientX - r.left) / r.width, 0, 1) * 100);
+    ed.hsv.v = Math.round(clamp(1 - (e.clientY - r.top) / r.height, 0, 1) * 100);
+    fromHsv(); return true;
+  });
+
+  syncTool();
+  requestAnimationFrame(() => placeScoop(wellTarget(ed.role)));
+}
+
+function fromHsv() { setRoleColor(hsvToHex(ed.hsv.h, ed.hsv.s, ed.hsv.v)); }
+function setRoleColor(hex) {
+  ed.colors[ed.role] = hex;
+  const m = app.querySelector(`.well[data-role="${ed.role}"] .mound`);
+  if (m) m.setAttribute('fill', hex);
+  syncTool();
+}
+function syncTool() {
+  const $ = s => app.querySelector(s);
+  const { h, s, v } = ed.hsv, hex = ed.colors[ed.role];
+  const tool = $('#tool');
+  tool.style.setProperty('--c', hex);
+  $('#toolTitle').textContent = ROLE_LABEL[ed.role] + 'の色';
+  if (document.activeElement !== $('#hexInput')) $('#hexInput').value = hex;
+  $('#sv').style.setProperty('--hue', `hsl(${h} 100% 50%)`);
+  const rad = h * Math.PI / 180, mid = 43;
+  Object.assign($('#hueKnob').style, { left: 50 + mid * Math.cos(rad) + '%', top: 50 + mid * Math.sin(rad) + '%', background: hsvToHex(h, 100, 100) });
+  $('#hueKnob').style.background = hex;
+  Object.assign($('#svKnob').style, { left: 26 + 48 * s / 100 + '%', top: 26 + 48 * (1 - v / 100) + '%' });
+  const tracks = {
+    h: 'linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)',
+    s: `linear-gradient(to right,${hsvToHex(h, 0, v)},${hsvToHex(h, 100, v)})`,
+    v: `linear-gradient(to right,#000,${hsvToHex(h, s, 100)})`,
+  };
+  ['h', 's', 'v'].forEach(k => {
+    const r = $('#r-' + k), n = $('#n-' + k);
+    r.value = ed.hsv[k]; r.style.setProperty('--track', tracks[k]);
+    if (document.activeElement !== n) n.value = ed.hsv[k];
+  });
+}
+function selectRole(k, animate) {
+  ed.role = k;
+  ed.hsv = hexToHsv(ed.colors[k]);
+  app.querySelectorAll('.well').forEach(w => { const on = w.dataset.role === k; w.classList.toggle('sel', on); w.setAttribute('aria-checked', on); });
+  app.querySelectorAll('[data-label]').forEach(l => l.classList.toggle('sel', l.dataset.label === k));
+  syncTool();
+  if (animate) animScoop(wellTarget(k), 320);
+}
+
+// ----- scoop / geometry helpers -----
+function rel(el) {
+  const b = app.querySelector('#bench').getBoundingClientRect(), r = el.getBoundingClientRect();
+  return { x: r.left - b.left, y: r.top - b.top, w: r.width, h: r.height };
+}
+function wellTarget(k) {
+  const r = rel(app.querySelector(`.well[data-role="${k}"]`));
+  return { x: r.x + r.w / 2 + 6, y: r.y + r.h / 2 - 2, a: -28 };
+}
+const scoopT = p => `translate(${p.x - 34}px, ${p.y - 22}px) rotate(${p.a}deg)`;
+function placeScoop(p) { scoopPos = p; const s = app.querySelector('#scoop'); if (s) s.style.transform = scoopT(p); }
+function animScoop(p, dur, easing = 'ease-in-out') {
+  const s = app.querySelector('#scoop');
+  if (!s) return Promise.resolve();
+  const from = scoopT(scoopPos);
+  scoopPos = p;
+  s.style.transform = scoopT(p);
+  return s.animate([{ transform: from }, { transform: scoopT(p) }], { duration: dur * SPEED, easing }).finished.catch(() => {});
+}
+window.addEventListener('resize', () => { if (view === 'editor' && !busy) placeScoop(wellTarget(ed.role)); });
+
+// ----- 完成演出 -----
+async function fillAndFinish() {
+  if (busy) return;
+  busy = true;
+  const bench = app.querySelector('#bench');
+  bench.classList.add('busy');
+  document.activeElement && document.activeElement.blur();
+  window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+  await wait(250 * SPEED);
+
+  const c = { ...ed.colors };
+  const stage = app.querySelector('#stage');
+  stage.innerHTML = bottleSVG(c, { cork: false, ribbon: false, glitter: false, guides: true, cls: 'edit-bottle' });
+  const svg = stage.querySelector('svg');
+  const stream = app.querySelector('#stream');
+  const scoopSand = app.querySelector('#scoopSand');
+  const r = rel(svg), s = r.w / 80;
+  const mouth = { x: r.x + 40 * s, y: r.y + 15 * s };
+
+  // 下の層から：アクセント → メイン → ベース
+  for (const [k, dur] of [['accent', 650], ['main', 950], ['base', 1500]]) {
+    selectRole(k, false);
+    const w = wellTarget(k);
+    await animScoop(w, 420);
+    await animScoop({ ...w, y: w.y + 6 }, 150, 'ease-in');
+    scoopSand.setAttribute('fill', c[k]);
+    await animScoop(w, 170, 'ease-out');
+    // 傾けたときの匙の縁（砂がこぼれる点）が瓶の口の真上に来る位置
+    const pour = { x: mouth.x + 5, y: mouth.y - 34, a: -28 };
+    await animScoop(pour, 560);
+    await animScoop({ ...pour, a: -100 }, 260);
+
+    const top = mouth.y - 13;
+    const [ly, lh] = LAYERS[k];
+    const fromY = r.y + (ly + lh) * s, toY = r.y + ly * s;
+    Object.assign(stream.style, { left: (mouth.x - 2) + 'px', top: top + 'px', background: c[k] });
+    const sa = stream.animate(
+      [{ height: (fromY - top) + 'px', opacity: 1 }, { height: (toY - top) + 'px', opacity: 1 }],
+      { duration: dur * SPEED, easing: 'linear', fill: 'forwards' });
+    const la = svg.querySelector('.sand-' + k).animate(
+      [{ transform: 'scaleY(0)' }, { transform: 'scaleY(1)' }],
+      { duration: dur * SPEED, easing: 'cubic-bezier(.3,.6,.4,1)', fill: 'forwards' });
+    await la.finished;
+    scoopSand.setAttribute('fill', 'transparent');
+    sa.cancel();
+    stream.style.opacity = 0; stream.style.height = 0;
+    await animScoop(pour, 220);
+  }
+  svg.querySelector('.guides') && svg.querySelector('.guides').animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300 * SPEED, fill: 'forwards' });
+
+  // スコップを皿に戻す
+  selectRole('base', false);
+  animScoop(wellTarget('base'), 520);
+
+  // コルクを閉める
+  const corkAside = app.querySelector('#corkAside');
+  const cr = rel(corkAside);
+  const dx = r.x + 25 * s - cr.x, dy = r.y - cr.y;
+  await corkAside.animate([
+    { transform: 'translate(0,0)' },
+    { transform: `translate(${dx * .5}px, ${dy - 46}px)`, offset: .55 },
+    { transform: `translate(${dx}px, ${dy}px)` },
+  ], { duration: 700 * SPEED, easing: 'ease-in-out', fill: 'forwards' }).finished;
+  corkAside.style.visibility = 'hidden';
+  svg.querySelector('.cork').style.opacity = 1;
+
+  // リボン（アクセント色）→ きらめき
+  const rib = svg.querySelector('.ribbon');
+  rib.style.opacity = 1;
+  rib.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 380 * SPEED });
+  await wait(260 * SPEED);
+  const gl = svg.querySelector('.glitter');
+  gl.style.opacity = 1;
+  gl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500 * SPEED });
+
+  // キラキラ（この瓶の3色だけ）
+  const spots = [
+    [-18, .30, 16, c.base], [r.w + 14, .18, 14, c.accent], [r.w + 4, .62, 10, c.main],
+    [-6, .78, 9, c.accent], [r.w / 2 + 52, -.02, 8, c.main], [r.w / 2 - 58, .06, 7, c.base],
+  ];
+  spots.forEach(([ox, oy, size, col], i) => {
+    const el = document.createElement('div');
+    el.className = 'burst';
+    el.style.left = (r.x + ox) + 'px';
+    el.style.top = (r.y + r.h * oy) + 'px';
+    el.innerHTML = `<svg width="${size * 2}" height="${size * 2}" viewBox="0 0 ${size * 2} ${size * 2}">${star4(size, size, size, col)}</svg>`;
+    bench.appendChild(el);
+    el.animate([
+      { transform: 'translate(-50%,-50%) scale(0) rotate(-30deg)', opacity: 0 },
+      { transform: 'translate(-50%,-50%) scale(1.35) rotate(0deg)', opacity: 1, offset: .6 },
+      { transform: 'translate(-50%,-50%) scale(1) rotate(0deg)', opacity: 1 },
+    ], { duration: 520 * SPEED, delay: i * 70 * SPEED, fill: 'backwards', easing: 'ease-out' });
+  });
+
+  // 完成！
+  const badge = document.createElement('div');
+  badge.className = 'done-badge';
+  badge.textContent = '完成！';
+  bench.appendChild(badge);
+  badge.animate([
+    { transform: 'translateX(-50%) scale(.6)', opacity: 0 },
+    { transform: 'translateX(-50%) scale(1.08)', opacity: 1, offset: .7 },
+    { transform: 'translateX(-50%) scale(1)', opacity: 1 },
+  ], { duration: 420 * SPEED, easing: 'ease-out' });
+
+  commit();
+  await wait(1500 * SPEED + 400);
+  location.replace(location.pathname + location.search + '#/bottle/' + ed.id);
+}
+
+function commit() {
+  const name = (ed.name || '').trim() || '名前のない瓶';
+  if (ed.id && findBottle(ed.id)) {
+    const b = findBottle(ed.id);
+    b.name = name; b.colors = { ...ed.colors };
+  } else {
+    ed.id = newId();
+    bottles.push({ id: ed.id, name, colors: { ...ed.colors } });
+  }
+  persist();
+}
+
+// ---------------- router ----------------
+function route() {
+  const h = location.hash || '#/';
+  let m;
+  if ((m = h.match(/^#\/bottle\/(.+)$/))) renderDetail(decodeURIComponent(m[1]));
+  else if (h === '#/new') renderEditor(null);
+  else if ((m = h.match(/^#\/edit\/(.+)$/))) renderEditor(decodeURIComponent(m[1]));
+  else renderShelf();
+  window.scrollTo(0, 0);
+}
+window.addEventListener('hashchange', route);
+route();
+})();

@@ -371,7 +371,7 @@ function renderEditor(id) {
       <div class="tray-area">
       <div class="tray" role="radiogroup" aria-label="配色">
         ${ROLES.map(([k, label]) => `
-        <button class="well${k === 'base' ? ' sel' : ''}" data-role="${k}" role="radio" aria-checked="${k === 'base'}" aria-label="${label}">
+        <button class="well${k === 'base' ? ' sel' : ''}" style="--sand:${ed.colors[k]}" data-role="${k}" role="radio" aria-checked="${k === 'base'}" aria-label="${label}">
           <svg viewBox="0 0 100 64" preserveAspectRatio="none"><ellipse class="mound" cx="50" cy="52" rx="${mound[k][0]}" ry="${mound[k][1]}" fill="${ed.colors[k]}"/></svg>
         </button>`).join('')}
       </div>
@@ -487,8 +487,8 @@ function renderEditor(id) {
 function fromHsv() { setRoleColor(hsvToHex(ed.hsv.h, ed.hsv.s, ed.hsv.v)); }
 function setRoleColor(hex) {
   ed.colors[ed.role] = hex;
-  const m = app.querySelector(`.well[data-role="${ed.role}"] .mound`);
-  if (m) m.setAttribute('fill', hex);
+  const w = app.querySelector(`.well[data-role="${ed.role}"]`);
+  if (w) { w.style.setProperty('--sand', hex); w.querySelector('.mound').setAttribute('fill', hex); }
   syncTool();
 }
 function syncTool() {

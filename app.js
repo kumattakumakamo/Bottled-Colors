@@ -180,14 +180,38 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const SPEED = reduced ? .2 : 1;
 const wait = ms => new Promise(r => setTimeout(r, ms));
 let view = '';
+let shelfColsNow = 3;
 
 // 画面全体を端末の表示領域に収める：縮小率K = min(幅/390, 高さ/設計上の必要高さ)
+// PCの横長画面では、作業台を左右2分割（左：瓶と砂／右：カラーツール）にする
 let K = 1;
+const isWide = () => innerWidth >= 860 && innerWidth / innerHeight >= 1.2;
+// 画面ごとの設計サイズ（PC横長のときは 作業台・棚 を横長レイアウトにする）
+function metrics(need) {
+  const wideEditor = view === 'editor' && isWide();
+  const wideShelf = view === 'shelf' && isWide();
+  app.classList.toggle('wide', wideEditor || wideShelf);
+  const W = app.clientWidth, Hv = app.clientHeight;
+  const designW = wideEditor || wideShelf ? 1000 : 390;
+  const h = wideEditor ? 760 : need;
+  const k = Math.min(W / designW, Hv / h);
+  return { wideEditor, wideShelf, W, Hv, k, sw: W / k };
+}
+// 棚の列数：棚の内幅に、1列あたり約124pxで何列入るか（スマホは3列固定）
+function shelfCols() {
+  const m = metrics(810);
+  if (!m.wideShelf) return 3;
+  const inner = m.sw - 48 - 8 - 24;
+  return Math.max(3, Math.floor(inner / 124));
+}
 function fit() {
   const sc = app.querySelector('.screen');
   if (!sc) return;
-  const W = app.clientWidth, Hv = app.clientHeight, need = +sc.dataset.h || 844;
-  K = Math.min(W / 390, Hv / need);
+  const m = metrics(+sc.dataset.h || 844);
+  sc.classList.toggle('wide', m.wideEditor);
+  sc.classList.toggle('wide-shelf', m.wideShelf);
+  const W = m.W, Hv = m.Hv;
+  K = m.k;
   sc.style.width = W / K + 'px';
   sc.style.height = Hv / K + 'px';
   sc.style.transform = `scale(${K})`;
@@ -196,9 +220,15 @@ function fit() {
 // ================= 1. shelf =================
 function renderShelf() {
   view = 'shelf';
+  const cols = shelfCols();
+  shelfColsNow = cols;
+  // 段数は最低3段。瓶のない場所には空の飾り窓を置く（undefined → 空の窓）
   const items = [...bottles, null];
+  const total = Math.max(3, Math.ceil(items.length / cols)) * cols;
+  while (items.length < total) items.push(undefined);
   const rows = [];
-  for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
+  for (let i = 0; i < items.length; i += cols) rows.push(items.slice(i, i + cols));
+  const idx = [...Array(cols).keys()];
   app.innerHTML = `<div class="screen" data-h="810">
   <header class="hdr">
     <button class="circle-btn" id="menuBtn" aria-label="メニュー">${icon('menu')}</button>
@@ -207,13 +237,13 @@ function renderShelf() {
   </header>
   <section class="cabinet" aria-label="コレクション棚">
     <div class="crown"></div>
-    <div class="cab-body">
+    <div class="cab-body" style="--cols:${cols}">
       ${rows.map(row => `
       <div class="shelf-row">
         <div class="slots">
-          ${[0, 1, 2].map(j => {
+          ${idx.map(j => {
             const b = row[j];
-            if (b === undefined) return '<div class="slot"></div>';
+            if (b === undefined) return '<div class="slot"><div class="niche-rim"></div><div class="niche"></div></div>';
             if (b === null) return `<div class="slot"><div class="niche-rim"></div><div class="niche"></div>
               <button class="new-slot" data-new aria-label="新しい瓶をつくる">${icon('plus')}New Bottle</button></div>`;
             return `<div class="slot"><div class="niche-rim"></div><div class="niche">${nicheDeco(b.colors)}</div>
@@ -222,7 +252,7 @@ function renderShelf() {
           }).join('')}
         </div>
         <div class="board"><div class="board-top"></div><div class="board-front"><div class="plates">
-          ${[0, 1, 2].map(j => {
+          ${idx.map(j => {
             const b = row[j];
             return b ? `<div class="plate${[...b.name].length > 6 ? ' small' : ''}" title="${esc(b.name)}">${esc(b.name)}</div>` : '<span></span>';
           }).join('')}
@@ -338,6 +368,7 @@ function renderEditor(id) {
     <div class="wall"></div>
     <div class="table">
       ${grains.map(([x, y, w]) => `<span class="grain" style="left:${x}px;top:${y}px;width:${w}px"></span>`).join('')}
+      <div class="tray-area">
       <div class="tray" role="radiogroup" aria-label="配色">
         ${ROLES.map(([k, label]) => `
         <button class="well${k === 'base' ? ' sel' : ''}" data-role="${k}" role="radio" aria-checked="${k === 'base'}" aria-label="${label}">
@@ -345,6 +376,7 @@ function renderEditor(id) {
         </button>`).join('')}
       </div>
       <div class="tray-labels">${ROLES.map(([k, label]) => `<span data-label="${k}" class="${k === 'base' ? 'sel' : ''}">${label}</span>`).join('')}</div>
+      </div>
 
       <section class="tool" id="tool" aria-label="色をえらぶ">
         <div class="tool-head">
@@ -512,6 +544,7 @@ function animScoop(p, dur, easing = 'ease-in-out') {
 }
 window.addEventListener('resize', () => {
   if (busy) return;
+  if (view === 'shelf' && shelfCols() !== shelfColsNow) { renderShelf(); return; }
   fit();
   if (view === 'editor') placeScoop(wellTarget(ed.role));
 });

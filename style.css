@@ -121,7 +121,7 @@ button { cursor: pointer; border: 0; background: none; padding: 0; }
 .slots {
   height: 164px;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(var(--cols, 3), 1fr);
   position: relative;
   z-index: 2;
 }
@@ -187,7 +187,7 @@ button { cursor: pointer; border: 0; background: none; padding: 0; }
 .plates {
   position: relative; z-index: 1;
   height: 100%;
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  display: grid; grid-template-columns: repeat(var(--cols, 3), 1fr);
   align-items: center; justify-items: center;
 }
 .plate {
@@ -231,7 +231,7 @@ button { cursor: pointer; border: 0; background: none; padding: 0; }
   flex: 1; min-height: 0;
   display: flex; flex-direction: column;
 }
-.tray, .tray-labels, .tool { position: relative; z-index: 1; }
+.tray-area, .tray, .tray-labels, .tool { position: relative; z-index: 1; }
 .grain { position: absolute; z-index: 0; height: 1px; background: rgba(122, 78, 38, .1); border-radius: 1px; }
 .bottle-stage {
   position: absolute; z-index: 2;
@@ -456,3 +456,44 @@ input[type=range]:focus-visible { outline: 2px solid var(--btn); outline-offset:
   .well { width: 88px; }
   .tray-labels span { width: 88px; }
 }
+
+/* ---------- PC（横長）：作業台を左右2分割 ---------- */
+.app.wide { max-width: 1440px; }
+.screen.wide .hdr { height: 70px; padding-top: 16px; }
+.screen.wide .wall { height: 250px; }
+.screen.wide .table {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr auto;
+  column-gap: 40px;
+  padding: 24px 40px 24px;
+}
+.screen.wide .tray-area { grid-column: 1; grid-row: 1 / span 2; align-self: center; margin-top: 40px; }
+.screen.wide .tool { grid-column: 2; grid-row: 1; margin-top: 0; align-self: start; padding: 22px 26px 26px; }
+.screen.wide .cta-wrap { grid-column: 2; grid-row: 2; margin-top: 0; padding-top: 18px; }
+.screen.wide .tray { height: 120px; }
+.screen.wide .well { width: 136px; height: 88px; border-radius: 44px; }
+.screen.wide .tray-labels span { width: 136px; font-size: 16px; }
+.screen.wide .tool-title { font-size: 18px; }
+.screen.wide .chip { width: 34px; height: 34px; }
+.screen.wide .hex-row input { font-size: 14px; width: 86px; }
+.screen.wide .tool-body { gap: 30px; margin-top: 20px; }
+.screen.wide .wheel { --size: 220px; }
+.screen.wide .hue-knob { width: 28px; height: 28px; }
+.screen.wide .sv-knob { width: 16px; height: 16px; }
+.screen.wide .sliders { gap: 22px; }
+.screen.wide .slider-label { font-size: 13px; }
+.screen.wide input[type=range] { height: 12px; border-radius: 6px; }
+.screen.wide input[type=range]::-webkit-slider-thumb { width: 22px; height: 22px; }
+.screen.wide .slider-row input[type=number] { width: 52px; height: 34px; font-size: 15px; }
+/* 左半分の中心に瓶を立てる（瓶の幅230：コルク86×55）。瓶の底は天板の奥の縁から40px手前 */
+.screen.wide .bottle-stage { left: calc(40px + (100% - 120px) / 4); top: -32px; width: 230px; height: 322px; }
+.screen.wide .bench-contact { left: calc(40px + (100% - 120px) / 4); top: 284px; width: 180px; height: 12px; }
+.screen.wide .cork-aside { left: calc(40px + (100% - 120px) / 4 + 150px); top: 237px; width: 86px; height: 55px; border-radius: 14px; }
+.screen.wide .cork-aside::before { height: 14px; }
+.screen.wide .done-badge { left: calc(40px + (100% - 120px) / 4); top: 110px; font-size: 22px; }
+
+/* ---------- PC（横長）：棚を横に広げて瓶を一望 ---------- */
+.screen.wide-shelf .cabinet { margin: 4px 24px 0; }
+.screen.wide-shelf .hdr { padding-left: 32px; padding-right: 32px; }
+.screen.wide-shelf .plate { max-width: 116px; }

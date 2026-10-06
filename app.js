@@ -238,15 +238,15 @@ function renderShelf() {
   <section class="cabinet" aria-label="コレクション棚">
     <div class="crown"></div>
     <div class="cab-body" style="--cols:${cols}">
-      ${rows.map(row => `
+      ${rows.map((row, ri) => `
       <div class="shelf-row">
         <div class="slots">
           ${idx.map(j => {
-            const b = row[j];
-            if (b === undefined) return '<div class="slot"><div class="niche-rim"></div><div class="niche"></div></div>';
-            if (b === null) return `<div class="slot"><div class="niche-rim"></div><div class="niche"></div>
+            const b = row[j], at = ri * cols + j;
+            if (b === undefined) return `<div class="slot" data-idx="${at}"><div class="niche-rim"></div><div class="niche"></div></div>`;
+            if (b === null) return `<div class="slot" data-idx="${at}"><div class="niche-rim"></div><div class="niche"></div>
               <button class="new-slot" data-new aria-label="新しい瓶をつくる">${icon('plus')}New Bottle</button></div>`;
-            return `<div class="slot"><div class="niche-rim"></div><div class="niche">${nicheDeco(b.colors)}</div>
+            return `<div class="slot" data-idx="${at}"><div class="niche-rim"></div><div class="niche">${nicheDeco(b.colors)}</div>
               <div class="contact"></div>
               <button class="bottle-btn" data-id="${b.id}" aria-label="${esc(b.name)}を開く">${bottleSVG(b.colors)}</button></div>`;
           }).join('')}
@@ -261,12 +261,108 @@ function renderShelf() {
     </div>
     <div class="cab-base"></div>
   </section>
-  <p class="shelf-hint">瓶をタップして開く</p></div>`;
+  <p class="shelf-hint">タップで開く ・ ドラッグで入れ替え（スマホは長押ししてから）</p></div>`;
   fit();
   app.querySelector('#menuBtn').onclick = () => toast('メニューは準備中です');
   app.querySelector('#addBtn').onclick = () => go('#/new');
   app.querySelectorAll('[data-new]').forEach(b => b.onclick = () => go('#/new'));
-  app.querySelectorAll('[data-id]').forEach(b => b.onclick = () => go('#/bottle/' + b.dataset.id));
+  app.querySelectorAll('[data-id]').forEach(b => b.onclick = () => {
+    if (Date.now() - dragEndedAt < 400) return;   // ドラッグ直後のクリックでは開かない
+    go('#/bottle/' + b.dataset.id);
+  });
+  setupShelfDrag();
+}
+
+// ----- 棚の並べ替え（ドラッグ＆ドロップ） -----
+// PC：つかんで6px以上動かすと開始／スマホ：350ms長押しで開始（すぐ動かすと棚のスクロール）
+let shelfAbort = null, dragEndedAt = 0, shelfScrollKeep = 0;
+function setupShelfDrag() {
+  if (shelfAbort) shelfAbort.abort();
+  shelfAbort = new AbortController();
+  const signal = shelfAbort.signal;
+  const screen = app.querySelector('.screen'), body = app.querySelector('.cab-body');
+  body.scrollTop = shelfScrollKeep; shelfScrollKeep = 0;
+  let st = null, scrollTimer = null;
+
+  const clearTarget = () => app.querySelectorAll('.slot.drop-target').forEach(el => el.classList.remove('drop-target'));
+  const cancel = () => {
+    if (!st) return;
+    clearTimeout(st.timer); clearInterval(scrollTimer);
+    if (st.ghost) st.ghost.remove();
+    st.btn.classList.remove('dragging'); clearTarget();
+    st = null;
+  };
+  const place = (cx, cy) => {
+    const r = screen.getBoundingClientRect();
+    const x = (cx - r.left) / K, y = (cy - r.top) / K;
+    st.ghost.style.transform = `translate(${x - 44}px, ${y - 84}px) scale(1.08)`;
+    clearTarget();
+    const el = document.elementFromPoint(cx, cy);
+    const slot = el && el.closest('.slot[data-idx]');
+    st.to = slot ? +slot.dataset.idx : null;
+    if (slot && st.to !== st.from) slot.classList.add('drop-target');
+    // 棚の上端・下端に近づいたら自動スクロール
+    const br = body.getBoundingClientRect();
+    clearInterval(scrollTimer);
+    const edge = 44 * K, dir = cy < br.top + edge ? -1 : cy > br.bottom - edge ? 1 : 0;
+    if (dir) scrollTimer = setInterval(() => { body.scrollTop += dir * 8; }, 16);
+  };
+  const begin = (cx, cy) => {
+    st.active = true;
+    st.btn.classList.add('dragging');
+    const g = document.createElement('div');
+    g.className = 'drag-ghost';
+    g.innerHTML = st.btn.innerHTML;
+    screen.appendChild(g);
+    st.ghost = g;
+    if (navigator.vibrate) navigator.vibrate(8);
+    place(cx, cy);
+  };
+
+  app.querySelectorAll('.bottle-btn').forEach(btn => {
+    btn.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      cancel();
+      const from = bottles.findIndex(b => b.id === btn.dataset.id);
+      st = { btn, from, to: null, x: e.clientX, y: e.clientY, pid: e.pointerId, touch: e.pointerType !== 'mouse', active: false };
+      if (st.touch) {
+        const { clientX, clientY } = e;
+        st.timer = setTimeout(() => { if (st && !st.active) begin(clientX, clientY); }, 350);
+      }
+    }, { signal });
+    btn.addEventListener('contextmenu', e => e.preventDefault(), { signal });
+  });
+
+  window.addEventListener('pointermove', e => {
+    if (!st || e.pointerId !== st.pid) return;
+    if (!st.active) {
+      const d = Math.hypot(e.clientX - st.x, e.clientY - st.y);
+      if (st.touch) { if (d > 10) cancel(); return; }   // 長押し前に動いた＝スクロール
+      if (d < 6) return;
+      begin(e.clientX, e.clientY);
+    }
+    place(e.clientX, e.clientY);
+  }, { signal });
+  // ドラッグ中は画面のスクロールを止める
+  document.addEventListener('touchmove', e => { if (st && st.active) e.preventDefault(); }, { passive: false, signal });
+
+  window.addEventListener('pointerup', e => {
+    if (!st || e.pointerId !== st.pid) return;
+    if (!st.active) { cancel(); return; }
+    const { from, to } = st;
+    cancel();
+    dragEndedAt = Date.now();
+    if (to === null || to === from || from < 0) return;
+    if (to < bottles.length) {
+      [bottles[from], bottles[to]] = [bottles[to], bottles[from]];   // 瓶どうしは入れ替え
+    } else {
+      bottles.push(bottles.splice(from, 1)[0]);                      // 空き窓・New Bottle なら最後へ
+    }
+    persist();
+    shelfScrollKeep = body.scrollTop;
+    renderShelf();
+  }, { signal });
+  window.addEventListener('pointercancel', e => { if (st && e.pointerId === st.pid) cancel(); }, { signal });
 }
 
 // ================= 3. detail =================

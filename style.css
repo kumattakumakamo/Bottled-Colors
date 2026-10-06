@@ -157,6 +157,18 @@ button { cursor: pointer; border: 0; background: none; padding: 0; }
   border-radius: 20px;
 }
 .bottle-btn:hover { transform: translateX(-50%) translateY(-3px); }
+.bottle-btn { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.bottle-btn.dragging { opacity: .25; }
+.slot.drop-target .niche-rim { background: #B9B6AF; }
+.slot.drop-target .bottle-btn { transform: translateX(-50%) translateY(-6px); }
+.drag-ghost {
+  position: absolute; left: 0; top: 0; z-index: 30;
+  width: 88px; height: 123.2px;
+  pointer-events: none;
+  transform-origin: 44px 84px;
+  filter: drop-shadow(0 8px 0 rgba(0,0,0,.12));
+}
+.drag-ghost svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .bottle-btn:focus-visible, .new-slot:focus-visible, .well:focus-visible { outline: 2.5px solid var(--btn); outline-offset: 3px; }
 .bottle-btn svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .new-slot {
